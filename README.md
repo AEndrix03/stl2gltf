@@ -1,152 +1,133 @@
 # STL2GLB Conversion Service
 
-High-performance STL to GLB conversion service with MinIO storage, built with Node.js and optimized C++ converter.
+Servizio ad alte prestazioni per la conversione di file STL in formato GLB con storage MinIO, costruito con Node.js e un convertitore C++ ottimizzato.
 
-## Features
+## 🚀 Caratteristiche
 
-- 🚀 **High Performance**: Native C++ converter for maximum speed
-- 📦 **MinIO Storage**: Distributed object storage with deduplication
-- 🔄 **Smart Caching**: Hash-based file deduplication
-- 🎨 **Material Support**: Custom colors, metallic, and roughness parameters
-- 📊 **Health Monitoring**: Comprehensive health checks and metrics
-- 🔒 **Production Ready**: Rate limiting, error handling, logging
-- 🐳 **Docker Ready**: Containerized deployment with Docker Compose
-- 📈 **Resource Efficient**: Configurable limits and cleanup
+- **📦 Storage MinIO**: Sistema di storage distribuito con deduplicazione
+- **🔄 Cache Intelligente**: Deduplicazione basata su hash per evitare riconversioni
+- **⚡ Convertitore Nativo**: Convertitore C++ ottimizzato per massime prestazioni
+- **🎨 Personalizzazione Materiali**: Supporto per colori personalizzati, metallicità e rugosità
+- **📊 Monitoraggio**: Health check e metriche complete
+- **🔒 Produzione Ready**: Rate limiting, gestione errori, logging strutturato
+- **🐳 Docker Ready**: Deployment containerizzato con Docker Compose
+- **📈 Efficienza Risorse**: Limiti configurabili e pulizia automatica
 
-## Quick Start
+## 🛠️ Avvio Rapido
 
-### Using Docker Compose (Recommended)
+### Utilizzando Docker Compose (Consigliato)
 
-1. **Clone and configure**:
+1. **Clonare e configurare**:
 
 ```bash
 git clone <repository-url>
 cd stl2glb-service
-cp .env.example .env
 ```
 
-2. **Edit `.env` file**:
+2. **Creare file di configurazione**:
 
 ```bash
+# Creare il file .env con le configurazioni necessarie
+cat > .env << EOF
 # MinIO Configuration
-MINIO_ACCESS_KEY=your_access_key
-MINIO_SECRET_KEY=your_secret_key_here
+MINIO_ENDPOINT=minio
+MINIO_PORT=9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin123
+MINIO_USE_SSL=false
+MINIO_BUCKET_STL=stl-files
+MINIO_BUCKET_GLB=glb-files
 
 # Service Configuration
+NODE_ENV=production
+PORT=9002
+LOG_LEVEL=info
 MAX_FILE_SIZE_MB=50
 MAX_CONCURRENT_JOBS=10
+TEMP_DIR=/tmp/stl2glb
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+
+# Security
+CORS_ORIGIN=*
+EOF
 ```
 
-3. **Start services**:
+3. **Avviare i servizi**:
 
 ```bash
-docker-compose up -d
+docker-compose up --build
 ```
 
-4. **Verify deployment**:
+4. **Verificare il deployment**:
 
 ```bash
 curl http://localhost:9002/health
 ```
 
-### Manual Installation
+## 📡 API
 
-1. **Install dependencies**:
+### Conversione STL→GLB tramite Upload
 
-```bash
-# System dependencies
-sudo apt-get update
-sudo apt-get install build-essential cmake nodejs npm
+**Endpoint**: `POST /api/convert/file`
 
-# Node.js dependencies
-npm install
-```
+Carica un file STL e lo converte in formato GLB.
 
-2. **Build native converter**:
+**Parametri**:
+- `stl` (richiesto): File STL (multipart/form-data)
+- `color` (opzionale): Array RGB `[r, g, b]` (range 0-1)
+- `metallic` (opzionale): Fattore metallico (0-1)
+- `roughness` (opzionale): Fattore rugosità (0-1)  
+- `generateNormals` (opzionale): Genera normali vertex (boolean)
 
-```bash
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j$(nproc)
-cp bin/stl2glb_native ../
-```
-
-3. **Configure environment**:
+**Esempio con curl**:
 
 ```bash
-cp .env.example .env
-# Edit .env with your settings
-```
-
-4. **Start MinIO** (or use existing instance):
-
-```bash
-# Using Docker
-docker run -d -p 9000:9000 -p 9001:9001 \
-  -e MINIO_ROOT_USER=your_access_key \
-  -e MINIO_ROOT_PASSWORD=your_secret_key \
-  minio/minio server /data --console-address ":9001"
-```
-
-5. **Start service**:
-
-```bash
-npm start
-```
-
-## API Usage
-
-### Convert STL to GLB
-
-**Endpoint**: `POST /api/convert`
-
-**Parameters**:
-
-- `stl` (required): STL file (multipart/form-data)
-- `color` (optional): RGB array `[r, g, b]` (0-1 range)
-- `metallic` (optional): Metallic factor (0-1)
-- `roughness` (optional): Roughness factor (0-1)
-- `generateNormals` (optional): Generate vertex normals (boolean)
-
-**Example using curl**:
-
-```bash
-# Basic conversion
-curl -X POST http://localhost:9002/api/convert \
+# Conversione base
+curl -X POST http://localhost:9002/api/convert/file \
   -F "stl=@model.stl"
 
-# With custom material
-curl -X POST http://localhost:9002/api/convert \
+# Con materiale personalizzato
+curl -X POST http://localhost:9002/api/convert/file \
   -F "stl=@model.stl" \
   -F "color=[1.0,0.0,0.0]" \
   -F "metallic=0.8" \
-  -F "roughness=0.2"
+  -F "roughness=0.2" \
+  -F "generateNormals=true"
 ```
 
-**Response**:
+### Conversione STL→GLB tramite Hash
 
+**Endpoint**: `POST /api/convert/`
+
+Converte un file STL già presente su MinIO utilizzando il suo hash.
+
+**Body JSON**:
 ```json
 {
-  "success": true,
-  "message": "File converted successfully",
-  "data": {
-    "filename": "a1b2c3d4...glb",
-    "originalName": "model.stl",
-    "size": 1048576,
-    "downloadUrl": "https://your-minio/bucket/file.glb",
-    "hash": "a1b2c3d4...",
-    "cached": false,
-    "processingTime": 1250
-  }
+  "stl_hash": "abc123...",
+  "color": [1.0, 0.0, 0.0],
+  "metallic": 0.8,
+  "roughness": 0.2,
+  "generateNormals": true
 }
 ```
 
-### Download Converted File
+**Risposta**:
+```json
+{
+  "glb_hash": "def456..."
+}
+```
+
+### Download File Convertito
 
 **Endpoint**: `GET /api/convert/download/:hash`
 
 ```bash
-curl -O http://localhost:9002/api/convert/download/a1b2c3d4e5f6...
+curl -O http://localhost:9002/api/convert/download/abc123...
 ```
 
 ### Health Check
@@ -157,54 +138,53 @@ curl -O http://localhost:9002/api/convert/download/a1b2c3d4e5f6...
 curl http://localhost:9002/health
 ```
 
-**Detailed Health**: `GET /health/detailed`
+**Health Check Dettagliato**: `GET /health/detailed`
 
-**Metrics**: `GET /health/metrics` (Prometheus format)
+**Metriche**: `GET /health/metrics` (formato Prometheus)
 
-## Configuration
+## ⚙️ Configurazione
 
-### Environment Variables
+### Variabili d'Ambiente
 
-| Variable    | Description                           | Default      |
-| ----------- | ------------------------------------- | ------------ |
-| `NODE_ENV`  | Environment (development/production)  | `production` |
-| `PORT`      | Service port                          | `9002`       |
-| `LOG_LEVEL` | Logging level (error/warn/info/debug) | `info`       |
+| Variabile | Descrizione | Default |
+|-----------|-------------|---------|
+| `NODE_ENV` | Ambiente (development/production) | `production` |
+| `PORT` | Porta del servizio | `9002` |
+| `LOG_LEVEL` | Livello di logging (error/warn/info/debug) | `info` |
 
-#### MinIO Configuration
+#### Configurazione MinIO
 
-| Variable           | Description           | Required    |
-| ------------------ | --------------------- | ----------- |
-| `MINIO_ENDPOINT`   | MinIO server endpoint | ✅          |
-| `MINIO_PORT`       | MinIO server port     | ✅          |
-| `MINIO_ACCESS_KEY` | MinIO access key      | ✅          |
-| `MINIO_SECRET_KEY` | MinIO secret key      | ✅          |
-| `MINIO_USE_SSL`    | Use SSL for MinIO     | `false`     |
-| `MINIO_REGION`     | MinIO region          | `us-east-1` |
-| `MINIO_BUCKET_STL` | STL files bucket      | `stl-files` |
-| `MINIO_BUCKET_GLB` | GLB files bucket      | `glb-files` |
+| Variabile | Descrizione | Richiesta |
+|-----------|-------------|-----------|
+| `MINIO_ENDPOINT` | Endpoint server MinIO | ✅ |
+| `MINIO_PORT` | Porta server MinIO | ✅ |
+| `MINIO_ACCESS_KEY` | Chiave di accesso MinIO | ✅ |
+| `MINIO_SECRET_KEY` | Chiave segreta MinIO | ✅ |
+| `MINIO_USE_SSL` | Usa SSL per MinIO | `false` |
+| `MINIO_BUCKET_STL` | Bucket per file STL | `stl-files` |
+| `MINIO_BUCKET_GLB` | Bucket per file GLB | `glb-files` |
 
-#### Service Limits
+#### Limiti del Servizio  
 
-| Variable              | Description                    | Default        |
-| --------------------- | ------------------------------ | -------------- |
-| `MAX_FILE_SIZE_MB`    | Maximum file size in MB        | `50`           |
-| `MAX_CONCURRENT_JOBS` | Maximum concurrent conversions | `10`           |
-| `TEMP_DIR`            | Temporary files directory      | `/tmp/stl2glb` |
+| Variabile | Descrizione | Default |
+|-----------|-------------|---------|
+| `MAX_FILE_SIZE_MB` | Dimensione massima file in MB | `50` |
+| `MAX_CONCURRENT_JOBS` | Conversioni simultanee massime | `10` |
+| `TEMP_DIR` | Directory file temporanei | `/tmp/stl2glb` |
 
 #### Rate Limiting
 
-| Variable                  | Description             | Default  |
-| ------------------------- | ----------------------- | -------- |
-| `RATE_LIMIT_WINDOW_MS`    | Rate limit window (ms)  | `900000` |
-| `RATE_LIMIT_MAX_REQUESTS` | Max requests per window | `100`    |
+| Variabile | Descrizione | Default |
+|-----------|-------------|---------|
+| `RATE_LIMIT_WINDOW_MS` | Finestra rate limit (ms) | `900000` |
+| `RATE_LIMIT_MAX_REQUESTS` | Richieste massime per finestra | `100` |
 
-## Architecture
+## 🏗️ Architettura
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   Client    │ => │   Nginx     │ => │  STL2GLB    │
-│             │    │ (Optional)  │    │  Service    │
+│             │    │ (Opzionale) │    │  Service    │
 └─────────────┘    └─────────────┘    └─────────────┘
                                               │
                                               ▼
@@ -214,54 +194,44 @@ curl http://localhost:9002/health
                    └─────────────┘    └─────────────┘
 ```
 
-### Components
+### Componenti
 
-1. **Express.js API**: RESTful API with validation and error handling
-2. **C++ Converter**: High-performance STL→GLB conversion
-3. **MinIO Storage**: Distributed object storage for files
-4. **Nginx** (optional): Reverse proxy with rate limiting
-5. **Docker**: Containerized deployment
+1. **API Express.js**: API RESTful con validazione e gestione errori
+2. **Convertitore C++**: Conversione STL→GLB ad alte prestazioni
+3. **Storage MinIO**: Storage distribuito per file
+4. **Nginx** (opzionale): Reverse proxy con rate limiting
+5. **Docker**: Deployment containerizzato
 
-### File Flow
+### Flusso dei File
 
-1. Client uploads STL file via POST
-2. Service calculates file hash for deduplication
-3. If GLB exists in MinIO, return cached result
-4. Otherwise, save STL to temporary location
-5. Execute native C++ converter with parameters
-6. Upload resulting GLB to MinIO
-7. Return download URL and metadata
-8. Clean up temporary files
+1. Il client carica il file STL tramite POST
+2. Il servizio calcola l'hash del file per la deduplicazione
+3. Se il GLB esiste in MinIO, restituisce il risultato cached
+4. Altrimenti, salva l'STL in posizione temporanea
+5. Esegue il convertitore C++ nativo con i parametri
+6. Carica il GLB risultante su MinIO
+7. Restituisce URL di download e metadati
+8. Pulisce i file temporanei
 
-## Performance
+## 📊 Performance
 
-### Benchmarks
+### Ottimizzazioni
 
-| File Size | Triangles | Conversion Time | Memory Usage |
-| --------- | --------- | --------------- | ------------ |
-| 1MB       | 10K       | ~50ms           | 15MB         |
-| 10MB      | 100K      | ~200ms          | 45MB         |
-| 50MB      | 500K      | ~800ms          | 150MB        |
+- **C++ Nativo**: 10-50x più veloce di JavaScript/WASM
+- **Efficienza Memoria**: Elaborazione streaming, footprint minimo
+- **Cache Intelligente**: Deduplicazione basata su hash previene rielaborazioni
+- **Elaborazione Concorrente**: Limiti di job configurabili
+- **Limiti Risorse**: Vincoli di memoria e CPU
 
-### Optimizations
+## 📈 Monitoraggio
 
-- **Native C++**: 10-50x faster than JavaScript/WASM
-- **Memory Efficient**: Streaming processing, minimal memory footprint
-- **Smart Caching**: Hash-based deduplication prevents reprocessing
-- **Concurrent Processing**: Configurable job limits
-- **Resource Limits**: Memory and CPU constraints
+### Endpoint Health
 
-## Monitoring
-
-### Health Endpoints
-
-- `GET /health` - Basic service status
-- `GET /health/detailed` - Comprehensive health with dependencies
-- `GET /health/metrics` - Prometheus metrics
+- `GET /health` - Stato base del servizio
 
 ### Logging
 
-Structured JSON logging with Winston:
+Logging JSON strutturato con Winston:
 
 ```json
 {
@@ -275,137 +245,114 @@ Structured JSON logging with Winston:
 }
 ```
 
-### Metrics
+## 🔧 Sviluppo
 
-- Conversion success/failure rates
-- Processing times
-- Memory usage
-- Cache hit rates
-- Active job counts
-
-## Development
-
-### Build Native Converter
+### Build Convertitore Nativo
 
 ```bash
-# Development build
+# Build development
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Debug ..
 make -j$(nproc)
 
-# Release build with optimizations
+# Build release con ottimizzazioni
 cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j$(nproc)
 ```
 
-### Run Tests
+### Esecuzione Test
 
 ```bash
 npm test
 ```
 
-### Development Mode
+### Modalità Sviluppo
 
 ```bash
 npm run dev
 ```
 
-## Deployment
+## 🚀 Deployment
 
-### Production Deployment
-
-1. **Build optimized image**:
+### Deployment Produzione
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker-compose up --build -d
 ```
 
-2. **With reverse proxy**:
-
-```bash
-docker-compose --profile with-proxy up -d
-```
-
-3. **Scaling**:
+### Scaling
 
 ```bash
 docker-compose up -d --scale stl2glb-service=3
 ```
 
-### Kubernetes Deployment
+### Health Check
 
-```bash
-kubectl apply -f k8s/
-```
+Configurare monitoraggio con:
 
-### Health Checks
+- Scraping metriche Prometheus
+- Dashboard Grafana  
+- Notifiche AlertManager
 
-Set up monitoring with:
+## 🔍 Risoluzione Problemi
 
-- Prometheus metrics scraping
-- Grafana dashboards
-- AlertManager notifications
-
-## Troubleshooting
-
-### Common Issues
+### Problemi Comuni
 
 **"Converter not found"**:
-
-- Ensure C++ binary is built: `./stl2glb_native --version`
-- Check file permissions: `chmod +x stl2glb_native`
+- Assicurarsi che il binario C++ sia compilato: `./stl2glb_native --version`
+- Verificare permessi del file: `chmod +x stl2glb_native`
 
 **"MinIO connection failed"**:
-
-- Verify MinIO is running: `curl http://localhost:9000/minio/health/live`
-- Check credentials in `.env` file
-- Ensure buckets exist
+- Verificare che MinIO sia in esecuzione: `curl http://localhost:9000/minio/health/live`
+- Controllare credenziali nel file `.env`
+- Assicurarsi che i bucket esistano
 
 **"Out of memory"**:
-
-- Reduce `MAX_CONCURRENT_JOBS`
-- Increase container memory limits
-- Check for memory leaks in logs
+- Ridurre `MAX_CONCURRENT_JOBS`
+- Aumentare limiti memoria container
+- Controllare memory leak nei log
 
 **"File too large"**:
+- Aumentare `MAX_FILE_SIZE_MB`
+- Regolare nginx `client_max_body_size`
+- Verificare spazio disco disponibile
 
-- Increase `MAX_FILE_SIZE_MB`
-- Adjust nginx `client_max_body_size`
-- Check available disk space
-
-### Debug Mode
+### Modalità Debug
 
 ```bash
 LOG_LEVEL=debug NODE_ENV=development npm start
 ```
 
-### Performance Tuning
+### Tuning Performance
 
 ```bash
-# Check system resources
+# Controllare risorse sistema
 docker stats
 
-# Monitor conversion performance
+# Monitorare performance conversioni
 curl http://localhost:9002/health/detailed
 
-# Profile native converter
+# Profilare convertitore nativo
 valgrind --tool=callgrind ./stl2glb_native input.stl output.glb
 ```
 
-## License
+## 📄 Licenza
 
-MIT License - see LICENSE file for details.
+Questo progetto è rilasciato sotto licenza MIT. Vedi il file LICENSE per i dettagli.
 
-## Contributing
+## 🤝 Contribuire
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+1. Fork del repository
+2. Creare feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit delle modifiche (`git commit -m 'Add amazing feature'`)
+4. Push del branch (`git push origin feature/amazing-feature`)
+5. Aprire Pull Request
 
-## Support
+## 📞 Supporto
 
-- 📧 Email: support@yourcompany.com
 - 🐛 Issues: [GitHub Issues](https://github.com/your-org/stl2glb-service/issues)
-- 📖 Documentation: [Wiki](https://github.com/your-org/stl2glb-service/wiki)
+- 📖 Documentazione: [Wiki](https://github.com/your-org/stl2glb-service/wiki)
+
+---
+
+**Nota**: Questo servizio è ottimizzato per ambienti di produzione e supporta carichi di lavoro ad alto volume con gestione efficiente delle risorse.
